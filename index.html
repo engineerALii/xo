@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>لعبة X-O أونلاين</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Cairo', sans-serif; background-color: #1a1a2e; color: #fff; }
+        .cell {
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+        }
+        .cell:hover:not(:disabled) {
+            background-color: #16213e;
+            transform: scale(1.05);
+        }
+        .x-mark { color: #e94560; text-shadow: 0 0 10px #e94560; }
+        .o-mark { color: #4ecca3; text-shadow: 0 0 10px #4ecca3; }
+        .winning-cell { background-color: #fcd34d !important; color: #000 !important; }
+        
+        /* Modal Animation */
+        .modal-enter { opacity: 0; transform: scale(0.9); }
+        .modal-enter-active { opacity: 1; transform: scale(1); transition: opacity 300ms, transform 300ms; }
+    </style>
+</head>
+<body class="flex flex-col items-center justify-center min-h-screen p-4">
+
+    <!-- شاشة البداية / الدخول -->
+    <div id="login-screen" class="w-full max-w-md bg-gray-800 p-8 rounded-2xl shadow-2xl text-center">
+        <h1 class="text-4xl font-bold mb-8 text-yellow-400">تحدي X - O</h1>
+        
+        <div class="mb-6">
+            <label class="block text-right mb-2 text-gray-300">اسم الغرفة (كلمة سر مشتركة):</label>
+            <input type="text" id="room-id" class="w-full p-3 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:border-yellow-400 text-center text-xl" placeholder="مثال: 1234">
+        </div>
+
+        <div class="mb-8">
+            <label class="block text-right mb-2 text-gray-300">اختر الرمز:</label>
+            <div class="flex gap-4 justify-center">
+                <button id="btn-choice-x" class="flex-1 py-3 bg-gray-700 rounded-lg hover:bg-gray-600 border-2 border-transparent focus:border-red-500 transition font-bold text-xl text-red-400" onclick="selectSymbol('X')">X</button>
+                <button id="btn-choice-o" class="flex-1 py-3 bg-gray-700 rounded-lg hover:bg-gray-600 border-2 border-transparent focus:border-green-500 transition font-bold text-xl text-green-400" onclick="selectSymbol('O')">O</button>
+            </div>
+            <p id="selected-symbol-text" class="mt-2 text-sm text-gray-400">لم يتم الاختيار</p>
+        </div>
+
+        <button id="login-btn" onclick="joinGame()" disabled class="w-full bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-3 rounded-lg transition transform active:scale-95 shadow-lg opacity-50 cursor-not-allowed">
+            جاري الاتصال...
+        </button>
+        <p id="login-error" class="mt-4 text-red-500 text-sm hidden"></p>
+    </div>
+
+    <!-- شاشة اللعب -->
+    <div id="game-screen" class="hidden w-full max-w-md flex flex-col items-center">
+        <div class="w-full flex justify-between items-center mb-6 bg-gray-800 p-4 rounded-xl shadow-lg">
+            <div class="text-center">
+                <span class="block text-xs text-gray-400">أنت تلعب بـ</span>
+                <span id="my-symbol-display" class="text-2xl font-bold"></span>
+            </div>
+            <div class="bg-gray-700 px-4 py-2 rounded-full border border-gray-600">
+                <span id="turn-indicator" class="text-lg font-bold animate-pulse">جاري الاتصال...</span>
+            </div>
+            <div class="text-center">
+                <span class="block text-xs text-gray-400">الغرفة</span>
+                <span id="room-display" class="text-xl font-mono"></span>
+            </div>
+        </div>
+
+        <div id="board" class="grid grid-cols-3 gap-3 w-full aspect-square bg-gray-700 p-3 rounded-2xl shadow-inner mb-6">
+            <!-- سيتم توليد الخلايا بالجافاسكريبت -->
+        </div>
+
+        <div class="text-center text-gray-400 text-sm">
+            <p id="opponent-status">بانتظار دخول الخصم...</p>
+        </div>
+    </div>
+
+    <!-- نافذة النتيجة -->
+    <div id="result-modal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 hidden backdrop-blur-sm">
+        <div class="bg-gray-800 p-8 rounded-2xl text-center max-w-sm w-full mx-4 border border-gray-600 shadow-2xl transform transition-all scale-100">
+            <h2 id="result-title" class="text-4xl font-bold mb-4"></h2>
+            <p id="result-message" class="text-gray-300 mb-8 text-lg"></p>
+            <button onclick="resetGame()" class="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold py-3 rounded-lg shadow-lg transform transition hover:-translate-y-1">
+                لعب مرة أخرى
+            </button>
+        </div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // 1. تكوين Firebase
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        // متغيرات الحالة
+        let currentUser = null;
+        let mySymbol = null; // 'X' or 'O'
+        let roomId = null;
+        let gameState = {
+            board: Array(9).fill(null),
+            turn: 'X',
+            winner: null, // null, 'X', 'O', 'draw'
+            players: { X: null, O: null },
+            lastMoveTime: 0
+        };
+        let unsubscribe = null;
+
+        // تهيئة الأصوات (Web Audio API)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        
+        function playSound(type) {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+
+            if (type === 'move') {
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.1);
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'win') {
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(500, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(1000, audioCtx.currentTime + 0.2);
+                osc.frequency.linearRampToValueAtTime(800, audioCtx.currentTime + 0.4);
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.6);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.6);
+            } else if (type === 'lose') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.4);
+                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
+                gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.4);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.4);
+            }
+        }
+
+        // --- إصلاح المصادقة ---
+        // دالة لتهيئة المصادقة باستخدام التوكن المخصص إذا وجد
+        const initAuth = async () => {
+            try {
+                if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                    await signInWithCustomToken(auth, __initial_auth_token);
+                } else {
+                    await signInAnonymously(auth);
+                }
+            } catch (error) {
+                console.error("Auth failed:", error);
+                showError("فشل الاتصال: " + error.message);
+            }
+        };
+
+        // تشغيل المصادقة
+        initAuth();
+
+        // مراقبة حالة المستخدم لتفعيل الزر فقط عند الجاهزية
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                currentUser = user;
+                const loginBtn = document.getElementById('login-btn');
+                loginBtn.innerText = "دخول اللعبة";
+                loginBtn.disabled = false;
+                loginBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            }
+        });
+
+        // دوال واجهة المستخدم
+        window.selectSymbol = (symbol) => {
+            mySymbol = symbol;
+            document.getElementById('btn-choice-x').className = symbol === 'X' 
+                ? "flex-1 py-3 bg-gray-600 rounded-lg border-2 border-red-500 text-red-400 font-bold text-xl shadow-inner"
+                : "flex-1 py-3 bg-gray-700 rounded-lg text-gray-400 font-bold text-xl opacity-50";
+            document.getElementById('btn-choice-o').className = symbol === 'O' 
+                ? "flex-1 py-3 bg-gray-600 rounded-lg border-2 border-green-500 text-green-400 font-bold text-xl shadow-inner"
+                : "flex-1 py-3 bg-gray-700 rounded-lg text-gray-400 font-bold text-xl opacity-50";
+            
+            document.getElementById('selected-symbol-text').innerText = `لقد اخترت: ${symbol}`;
+            document.getElementById('selected-symbol-text').className = symbol === 'X' ? "mt-2 text-sm text-red-400 font-bold" : "mt-2 text-sm text-green-400 font-bold";
+        };
+
+        window.joinGame = async () => {
+            const inputRoomId = document.getElementById('room-id').value.trim();
+            if (!inputRoomId) {
+                showError("الرجاء إدخال اسم الغرفة");
+                return;
+            }
+            if (!mySymbol) {
+                showError("الرجاء اختيار X أو O");
+                return;
+            }
+            if (!currentUser) {
+                showError("لم يتم الاتصال بالسيرفر بعد، انتظر قليلاً...");
+                return;
+            }
+
+            roomId = inputRoomId;
+            const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe_games', roomId);
+
+            try {
+                // محاولة قراءة المستند
+                // ملاحظة: قد تفشل getDoc إذا لم يكن المستند موجوداً وكانت القواعد تمنع list، لذا نستخدم try/catch
+                let docSnap;
+                try {
+                    docSnap = await getDoc(gameRef);
+                } catch (e) {
+                    // إذا فشل القراءة بسبب الصلاحيات (لأنه غير موجود)، سنحاول الإنشاء مباشرة
+                    docSnap = { exists: () => false };
+                }
+                
+                if (!docSnap.exists()) {
+                    // إنشاء غرفة جديدة
+                    await setDoc(gameRef, {
+                        board: Array(9).fill(null),
+                        turn: 'X',
+                        winner: null,
+                        players: {
+                            [mySymbol]: currentUser.uid,
+                            [mySymbol === 'X' ? 'O' : 'X']: null
+                        },
+                        lastMoveTime: Date.now()
+                    });
+                } else {
+                    // الانضمام لغرفة موجودة
+                    const data = docSnap.data();
+                    if (data.players[mySymbol] && data.players[mySymbol] !== currentUser.uid) {
+                        showError(`الرمز ${mySymbol} محجوز بالفعل في هذه الغرفة! اختر الرمز الآخر.`);
+                        return;
+                    }
+                    
+                    // تحديث بيانات اللاعب إذا كان المقعد فارغاً
+                    if (!data.players[mySymbol]) {
+                        await updateDoc(gameRef, {
+                            [`players.${mySymbol}`]: currentUser.uid
+                        });
+                    }
+                }
+
+                startGameListener();
+                document.getElementById('login-screen').classList.add('hidden');
+                document.getElementById('game-screen').classList.remove('hidden');
+                document.getElementById('game-screen').classList.add('flex');
+                document.getElementById('room-display').innerText = roomId;
+                document.getElementById('my-symbol-display').innerText = mySymbol;
+                document.getElementById('my-symbol-display').className = `text-4xl font-bold ${mySymbol === 'X' ? 'text-red-500' : 'text-green-500'}`;
+                
+                createBoard();
+
+            } catch (err) {
+                console.error("Join Game Error:", err);
+                // التعامل مع أخطاء الصلاحيات بشكل خاص
+                if (err.code === 'permission-denied') {
+                    showError("خطأ في الصلاحيات. تأكد من أنك متصل وحاول تحديث الصفحة.");
+                } else {
+                    showError("حدث خطأ أثناء الانضمام: " + err.message);
+                }
+            }
+        };
+
+        function showError(msg) {
+            const errEl = document.getElementById('login-error');
+            errEl.innerText = msg;
+            errEl.classList.remove('hidden');
+        }
+
+        function createBoard() {
+            const boardEl = document.getElementById('board');
+            boardEl.innerHTML = '';
+            for (let i = 0; i < 9; i++) {
+                const cell = document.createElement('div');
+                cell.className = 'cell bg-gray-800 rounded-lg flex items-center justify-center text-4xl font-bold cursor-pointer h-full w-full select-none';
+                cell.dataset.index = i;
+                cell.onclick = () => makeMove(i);
+                boardEl.appendChild(cell);
+            }
+        }
+
+        async function makeMove(index) {
+            if (!gameState) return;
+            if (gameState.board[index] !== null) return; // الخانة مشغولة
+            if (gameState.winner) return; // اللعبة منتهية
+            if (gameState.turn !== mySymbol) return; // ليس دورك
+
+            // التحقق من وجود الخصم
+            const opponentSymbol = mySymbol === 'X' ? 'O' : 'X';
+            if (!gameState.players[opponentSymbol]) {
+                // يمكن السماح باللعب الفردي للتجربة، لكن الأفضل انتظار الخصم في لعبة أونلاين
+            }
+
+            const newBoard = [...gameState.board];
+            newBoard[index] = mySymbol;
+            
+            // التحقق من الفوز محلياً قبل الإرسال (اختياري للسرعة)
+            const winner = checkWinner(newBoard);
+            const nextTurn = mySymbol === 'X' ? 'O' : 'X';
+
+            const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe_games', roomId);
+            
+            // تشغيل الصوت فوراً للتفاعل
+            playSound('move');
+
+            try {
+                await updateDoc(gameRef, {
+                    board: newBoard,
+                    turn: nextTurn,
+                    winner: winner,
+                    lastMoveTime: Date.now()
+                });
+            } catch (e) {
+                console.error("Move Error:", e);
+            }
+        }
+
+        function checkWinner(board) {
+            const lines = [
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
+                [0, 3, 6], [1, 4, 7], [2, 5, 8], // Cols
+                [0, 4, 8], [2, 4, 6]             // Diagonals
+            ];
+
+            for (let line of lines) {
+                const [a, b, c] = line;
+                if (board[a] && board[a] === board[b] && board[a] === board[c]) {
+                    return board[a];
+                }
+            }
+
+            if (!board.includes(null)) return 'draw';
+            return null;
+        }
+
+        function startGameListener() {
+            const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe_games', roomId);
+            
+            unsubscribe = onSnapshot(gameRef, (docSnap) => {
+                if (!docSnap.exists()) return;
+                
+                const data = docSnap.data();
+                gameState = data;
+                updateUI();
+            }, (error) => {
+                console.error("Snapshot Error:", error);
+                if (error.code === 'permission-denied') {
+                   // قد يحدث هذا إذا تم حذف الغرفة أو تغيرت الصلاحيات
+                   showError("فقد الاتصال بالغرفة.");
+                }
+            });
+        }
+
+        function updateUI() {
+            const cells = document.querySelectorAll('.cell');
+            
+            // تحديث البورد
+            gameState.board.forEach((val, idx) => {
+                const cell = cells[idx];
+                cell.innerText = val || '';
+                cell.className = 'cell bg-gray-800 rounded-lg flex items-center justify-center text-4xl font-bold cursor-pointer h-full w-full select-none'; // Reset classes
+                
+                if (val === 'X') {
+                    cell.classList.add('x-mark');
+                } else if (val === 'O') {
+                    cell.classList.add('o-mark');
+                }
+            });
+
+            // تحديث مؤشر الدور
+            const turnIndicator = document.getElementById('turn-indicator');
+            const opponentSymbol = mySymbol === 'X' ? 'O' : 'X';
+            const opponentId = gameState.players[opponentSymbol];
+
+            if (!opponentId) {
+                document.getElementById('opponent-status').innerText = `بانتظار انضمام اللاعب ${opponentSymbol}... شارك اسم الغرفة (${roomId})`;
+                document.getElementById('opponent-status').className = "text-yellow-400 font-bold animate-pulse";
+                turnIndicator.innerText = "بانتظار الخصم";
+                turnIndicator.className = "text-lg font-bold text-gray-400";
+            } else {
+                document.getElementById('opponent-status').innerText = "الخصم متصل";
+                document.getElementById('opponent-status').className = "text-green-500 font-bold";
+                
+                if (gameState.winner) {
+                     turnIndicator.innerText = "انتهت اللعبة";
+                     turnIndicator.className = "text-lg font-bold text-gray-400";
+                } else if (gameState.turn === mySymbol) {
+                    turnIndicator.innerText = "دورك الآن!";
+                    turnIndicator.className = "text-lg font-bold text-green-400 animate-bounce";
+                } else {
+                    turnIndicator.innerText = "دور الخصم...";
+                    turnIndicator.className = "text-lg font-bold text-red-400";
+                }
+            }
+
+            // التعامل مع الفوز/النهاية
+            if (gameState.winner) {
+                handleGameEnd(gameState.winner);
+            } else {
+                // إخفاء المودال إذا بدأت لعبة جديدة
+                document.getElementById('result-modal').classList.add('hidden');
+            }
+        }
+
+        function handleGameEnd(winner) {
+            const modal = document.getElementById('result-modal');
+            const title = document.getElementById('result-title');
+            const msg = document.getElementById('result-message');
+            
+            modal.classList.remove('hidden');
+            
+            if (winner === 'draw') {
+                title.innerText = "تعادل!";
+                title.className = "text-4xl font-bold mb-4 text-gray-300";
+                msg.innerText = "لعبة جيدة، لا يوجد فائز.";
+            } else if (winner === mySymbol) {
+                title.innerText = "مبروك! أنت الفائز";
+                title.className = "text-4xl font-bold mb-4 text-yellow-400";
+                msg.innerText = "لقد هزمت الخصم بجدارة.";
+                playSound('win');
+                highlightWinningCells();
+            } else {
+                title.innerText = "حظ أوفر";
+                title.className = "text-4xl font-bold mb-4 text-red-500";
+                msg.innerText = "لقد فاز الخصم هذه المرة.";
+                playSound('lose');
+                highlightWinningCells();
+            }
+        }
+
+        function highlightWinningCells() {
+            const lines = [
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], 
+                [0, 3, 6], [1, 4, 7], [2, 5, 8], 
+                [0, 4, 8], [2, 4, 6]
+            ];
+            const cells = document.querySelectorAll('.cell');
+            
+            for (let line of lines) {
+                const [a, b, c] = line;
+                if (gameState.board[a] && gameState.board[a] === gameState.board[b] && gameState.board[a] === gameState.board[c]) {
+                    cells[a].classList.add('winning-cell');
+                    cells[b].classList.add('winning-cell');
+                    cells[c].classList.add('winning-cell');
+                }
+            }
+        }
+
+        window.resetGame = async () => {
+             // إعادة تعيين اللعبة في قاعدة البيانات
+             const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe_games', roomId);
+             
+             try {
+                 await updateDoc(gameRef, {
+                     board: Array(9).fill(null),
+                     turn: 'X', 
+                     winner: null,
+                     lastMoveTime: Date.now()
+                 });
+             } catch(e) {
+                 console.error("Reset Game Error:", e);
+             }
+        };
+
+    </script>
+</body>
+</html>
