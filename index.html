@@ -26,6 +26,13 @@
             box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
         }
 
+        .glass-panel-dark {
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
         .cell {
             background: rgba(255, 255, 255, 0.03);
             border: 2px solid rgba(255, 255, 255, 0.05);
@@ -90,9 +97,33 @@
             animation: spin 1s linear infinite;
         }
         @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+        /* Chat Styles */
+        .chat-container {
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .chat-visible {
+            transform: translateY(0);
+        }
+        .chat-hidden {
+            transform: translateY(110%);
+        }
+        
+        .chat-bubble-me {
+            background: linear-gradient(135deg, #fbbf24, #d97706);
+            color: #000;
+            border-radius: 18px 18px 0 18px;
+            margin-left: auto;
+        }
+        .chat-bubble-them {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            border-radius: 18px 18px 18px 0;
+            margin-right: auto;
+        }
     </style>
 </head>
-<body class="flex flex-col items-center justify-center min-h-screen p-4 selection:bg-yellow-500 selection:text-black">
+<body class="flex flex-col items-center justify-center min-h-screen p-4 selection:bg-yellow-500 selection:text-black relative overflow-hidden">
 
     <!-- شاشة البداية / الدخول -->
     <div id="login-screen" class="w-full max-w-lg glass-panel p-8 rounded-3xl text-center transform transition-all duration-500 hover:scale-[1.01]">
@@ -142,10 +173,11 @@
     </div>
 
     <!-- شاشة اللعب -->
-    <div id="game-screen" class="hidden w-full max-w-lg flex flex-col items-center">
+    <div id="game-screen" class="hidden w-full max-w-lg flex flex-col items-center pb-20">
         <!-- الهيدر -->
         <div class="w-full glass-panel p-4 rounded-2xl shadow-2xl mb-6 flex flex-col gap-4">
             <div class="flex justify-between items-center">
+                <!-- معلومات اللاعب -->
                 <div class="flex items-center gap-3">
                     <div class="bg-gray-800 p-2 rounded-lg">
                         <i class="fas fa-user text-gray-400"></i>
@@ -156,12 +188,13 @@
                     </div>
                 </div>
 
-                <div class="bg-gray-900/60 px-6 py-2 rounded-full border border-gray-700 backdrop-blur-sm">
-                    <span id="turn-indicator" class="text-sm font-bold text-gray-400 flex items-center gap-2">
-                        <span class="w-2 h-2 bg-gray-500 rounded-full animate-pulse"></span> جاري التحميل
-                    </span>
-                </div>
+                <!-- زر الدردشة -->
+                <button onclick="toggleChat()" class="relative bg-gray-800 hover:bg-gray-700 p-3 rounded-full transition-all group">
+                    <i class="fas fa-comment-alt text-white group-hover:text-yellow-400 transition-colors"></i>
+                    <span id="chat-badge" class="absolute top-0 right-0 w-3 h-3 bg-red-500 rounded-full border-2 border-gray-800 hidden animate-pulse"></span>
+                </button>
 
+                <!-- معلومات الغرفة -->
                 <div class="flex items-center gap-3 text-left">
                     <div class="text-right">
                         <span class="block text-[10px] text-gray-400 uppercase tracking-wide">الغرفة</span>
@@ -173,20 +206,27 @@
                 </div>
             </div>
 
+            <!-- مؤشر الدور -->
+            <div class="bg-gray-900/60 px-6 py-2 rounded-full border border-gray-700 backdrop-blur-sm mx-auto w-full max-w-xs text-center">
+                <span id="turn-indicator" class="text-sm font-bold text-gray-400 flex items-center justify-center gap-2">
+                    <span class="w-2 h-2 bg-gray-500 rounded-full animate-pulse"></span> جاري التحميل
+                </span>
+            </div>
+
             <!-- رابط الدعوة -->
             <div id="invite-section" class="bg-blue-600/20 border border-blue-500/30 rounded-xl p-3 flex justify-between items-center animate-pulse">
                 <div class="flex items-center gap-2 text-blue-200 text-sm">
                     <i class="fas fa-share-alt"></i>
-                    <span>أرسل هذا الرابط لصديقك ليدخل معك فوراً!</span>
+                    <span>أرسل هذا الرابط لصديقك!</span>
                 </div>
                 <button onclick="copyInviteLink()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg transition font-bold shadow-lg shadow-blue-600/20">
-                    نسخ الرابط
+                    نسخ
                 </button>
             </div>
         </div>
 
         <!-- البورد -->
-        <div id="board" class="grid grid-cols-3 gap-3 w-full aspect-square glass-panel p-3 rounded-3xl shadow-2xl mb-6 relative">
+        <div id="board" class="grid grid-cols-3 gap-3 w-full aspect-square glass-panel p-3 rounded-3xl shadow-2xl mb-6 relative z-0">
              <!-- سيتم التوليد هنا -->
         </div>
 
@@ -196,6 +236,30 @@
                 <div class="loader w-4 h-4 border-2 border-gray-500 border-t-transparent"></div>
                 بانتظار انضمام الخصم...
              </div>
+        </div>
+    </div>
+
+    <!-- نافذة الدردشة -->
+    <div id="chat-panel" class="chat-container chat-hidden fixed bottom-0 left-0 w-full h-[70vh] glass-panel-dark rounded-t-3xl z-40 flex flex-col shadow-2xl max-w-lg mx-auto right-0">
+        <!-- Chat Header -->
+        <div class="p-4 border-b border-gray-700 flex justify-between items-center bg-black/40 rounded-t-3xl cursor-pointer" onclick="toggleChat()">
+            <h3 class="font-bold text-yellow-400"><i class="fas fa-comments mr-2"></i> الدردشة الحية</h3>
+            <button class="text-gray-400 hover:text-white"><i class="fas fa-chevron-down"></i></button>
+        </div>
+        
+        <!-- Messages Area -->
+        <div id="chat-messages" class="flex-1 overflow-y-auto p-4 space-y-3 scroll-smooth">
+            <div class="text-center text-xs text-gray-500 my-4">-- بداية المحادثة --</div>
+        </div>
+        
+        <!-- Input Area -->
+        <div class="p-3 border-t border-gray-700 bg-black/40 pb-6">
+            <form onsubmit="event.preventDefault(); sendMessage();" class="flex gap-2">
+                <input type="text" id="chat-input" class="flex-1 bg-gray-800 border border-gray-600 text-white rounded-full px-4 py-3 focus:outline-none focus:border-yellow-500" placeholder="اكتب رسالة..." autocomplete="off">
+                <button type="submit" class="bg-yellow-500 hover:bg-yellow-600 text-black w-12 h-12 rounded-full flex items-center justify-center transition shadow-lg transform active:scale-95">
+                    <i class="fas fa-paper-plane text-lg"></i>
+                </button>
+            </form>
         </div>
     </div>
 
@@ -234,7 +298,6 @@
             firebaseConfig = JSON.parse(__firebase_config);
             currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
         } else {
-            // إعدادات GitHub (تأكد من تحديث Authorized Domains في Firebase)
             firebaseConfig = {
                 apiKey: "AIzaSyD6MRZ7d7J1333erYoBrUGqocJNdGNjB7w",
                 authDomain: "neew-aec2b.firebaseapp.com",
@@ -260,9 +323,12 @@
             turn: 'X',
             winner: null, 
             players: { X: null, O: null },
-            lastMoveTime: 0
+            lastMoveTime: 0,
+            messages: [] // تخزين الرسائل
         };
         let unsubscribe = null;
+        let isChatOpen = false;
+        let lastMessageCount = 0;
 
         // تهيئة الأصوات
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
@@ -275,7 +341,7 @@
             
             const now = audioCtx.currentTime;
 
-            if (type === 'click') { // صوت خفيف عند الضغط
+            if (type === 'click') {
                 osc.type = 'sine';
                 osc.frequency.setValueAtTime(600, now);
                 osc.frequency.exponentialRampToValueAtTime(300, now + 0.1);
@@ -283,7 +349,7 @@
                 gainNode.gain.linearRampToValueAtTime(0, now + 0.1);
                 osc.start();
                 osc.stop(now + 0.1);
-            } else if (type === 'move') { // صوت الحركة
+            } else if (type === 'move') {
                 osc.type = 'triangle';
                 osc.frequency.setValueAtTime(300, now);
                 osc.frequency.linearRampToValueAtTime(500, now + 0.1);
@@ -291,18 +357,25 @@
                 gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
                 osc.start();
                 osc.stop(now + 0.2);
-            } else if (type === 'win') { // نغمة الفوز
+            } else if (type === 'message') { // صوت رسالة
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, now);
+                osc.frequency.setValueAtTime(1200, now + 0.1);
+                gainNode.gain.setValueAtTime(0.05, now);
+                gainNode.gain.linearRampToValueAtTime(0, now + 0.2);
+                osc.start();
+                osc.stop(now + 0.2);
+            } else if (type === 'win') {
                 osc.type = 'square';
-                // تتابعية بسيطة
-                osc.frequency.setValueAtTime(523.25, now); // C5
-                osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
-                osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
-                osc.frequency.setValueAtTime(1046.50, now + 0.4); // C6
+                osc.frequency.setValueAtTime(523.25, now);
+                osc.frequency.setValueAtTime(659.25, now + 0.1);
+                osc.frequency.setValueAtTime(783.99, now + 0.2);
+                osc.frequency.setValueAtTime(1046.50, now + 0.4);
                 gainNode.gain.setValueAtTime(0.05, now);
                 gainNode.gain.linearRampToValueAtTime(0, now + 0.8);
                 osc.start();
                 osc.stop(now + 0.8);
-            } else if (type === 'lose') { // نغمة الخسارة
+            } else if (type === 'lose') {
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(300, now);
                 osc.frequency.linearRampToValueAtTime(100, now + 0.5);
@@ -313,6 +386,77 @@
             }
         }
 
+        // --- دوال Chat ---
+        window.toggleChat = () => {
+            const panel = document.getElementById('chat-panel');
+            isChatOpen = !isChatOpen;
+            
+            if (isChatOpen) {
+                panel.classList.remove('chat-hidden');
+                panel.classList.add('chat-visible');
+                document.getElementById('chat-badge').classList.add('hidden'); // إخفاء التنبيه
+                scrollToBottom();
+                setTimeout(() => document.getElementById('chat-input').focus(), 300);
+            } else {
+                panel.classList.remove('chat-visible');
+                panel.classList.add('chat-hidden');
+            }
+        };
+
+        window.sendMessage = async () => {
+            const input = document.getElementById('chat-input');
+            const msgText = input.value.trim();
+            if (!msgText || !roomId || !mySymbol) return;
+
+            const msgData = {
+                sender: mySymbol,
+                text: msgText,
+                timestamp: Date.now()
+            };
+
+            // تفريغ الحقل فوراً
+            input.value = '';
+            input.focus();
+
+            // إضافة الرسالة للمصفوفة الحالية (تفاؤلياً) ثم التحديث
+            const currentMessages = gameState.messages || [];
+            const newMessages = [...currentMessages, msgData];
+
+            const gameRef = doc(db, 'artifacts', currentAppId, 'public', 'data', 'tictactoe_games', roomId);
+            try {
+                await updateDoc(gameRef, {
+                    messages: newMessages
+                });
+            } catch (e) {
+                console.error("Failed to send message", e);
+            }
+        };
+
+        function renderMessages(messages) {
+            const container = document.getElementById('chat-messages');
+            container.innerHTML = '<div class="text-center text-xs text-gray-500 my-4">-- بداية المحادثة --</div>';
+            
+            if (!messages) return;
+
+            messages.forEach(msg => {
+                const isMe = msg.sender === mySymbol;
+                const bubble = document.createElement('div');
+                bubble.className = `max-w-[80%] px-4 py-2 text-sm mb-2 break-words shadow-sm ${isMe ? 'chat-bubble-me' : 'chat-bubble-them'}`;
+                
+                const senderName = isMe ? 'أنت' : 'الخصم';
+                bubble.innerHTML = `<div class="font-bold text-[10px] opacity-70 mb-0.5">${senderName}</div>${msg.text}`;
+                
+                container.appendChild(bubble);
+            });
+            
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('chat-messages');
+            container.scrollTop = container.scrollHeight;
+        }
+
         // --- دوال مساعدة للغرفة والرابط ---
         window.generateRoomId = () => {
             const randomId = Math.floor(1000 + Math.random() * 9000);
@@ -320,13 +464,11 @@
             playSound('click');
         };
 
-        // فحص الرابط عند الفتح لمعرفة الغرفة
         function checkUrlForRoom() {
             const urlParams = new URLSearchParams(window.location.search);
             const roomParam = urlParams.get('room');
             if (roomParam) {
                 document.getElementById('room-id').value = roomParam;
-                // يمكننا أيضاً محاولة تحديد الرمز تلقائياً إذا أردنا (متقدم)
             }
         }
 
@@ -337,7 +479,6 @@
             navigator.clipboard.writeText(inviteUrl).then(() => {
                 showToast("تم نسخ رابط الدعوة! أرسله لصديقك");
             }).catch(() => {
-                // Fallback for some browsers
                 const input = document.createElement('input');
                 input.value = inviteUrl;
                 document.body.appendChild(input);
@@ -368,7 +509,6 @@
             } catch (error) {
                 console.error("Auth Error:", error);
                 let errorMsg = "فشل الاتصال: " + error.message;
-                // تحسين رسائل الخطأ
                 if (error.code === 'auth/operation-not-allowed') errorMsg = "خطأ: الدخول المجهول غير مفعل.";
                 if (error.code === 'auth/unauthorized-domain') errorMsg = "خطأ: النطاق غير مصرح به.";
                 
@@ -402,7 +542,6 @@
             mySymbol = symbol;
             playSound('click');
             
-            // تحديث الستايل
             const btnX = document.getElementById('btn-choice-x');
             const btnO = document.getElementById('btn-choice-o');
             
@@ -444,7 +583,6 @@
             roomId = inputRoomId;
             const gameRef = doc(db, 'artifacts', currentAppId, 'public', 'data', 'tictactoe_games', roomId);
 
-            // تغيير حالة الزر
             const loginBtn = document.getElementById('login-btn');
             loginBtn.disabled = true;
             document.getElementById('btn-text').innerText = "جاري الدخول...";
@@ -455,12 +593,10 @@
                 try {
                     docSnap = await getDoc(gameRef);
                 } catch (e) {
-                    // إذا فشل بسبب الصلاحيات (غير موجود)، نعامله كجديد
                     docSnap = { exists: () => false };
                 }
                 
                 if (!docSnap.exists()) {
-                    // إنشاء غرفة جديدة
                     await setDoc(gameRef, {
                         board: Array(9).fill(null),
                         turn: 'X',
@@ -469,13 +605,11 @@
                             [mySymbol]: currentUser.uid,
                             [mySymbol === 'X' ? 'O' : 'X']: null
                         },
-                        lastMoveTime: Date.now()
+                        lastMoveTime: Date.now(),
+                        messages: []
                     });
                 } else {
-                    // الانضمام لغرفة موجودة
                     const data = docSnap.data();
-                    
-                    // إذا كان الرمز محجوزاً لشخص آخر
                     if (data.players[mySymbol] && data.players[mySymbol] !== currentUser.uid) {
                         showError(`عذراً، الرمز ${mySymbol} مأخوذ بالفعل في الغرفة ${roomId}. جرب الرمز الآخر.`);
                         loginBtn.disabled = false;
@@ -484,7 +618,6 @@
                         return;
                     }
                     
-                    // حجز المكان إذا كان فارغاً
                     if (!data.players[mySymbol]) {
                         await updateDoc(gameRef, {
                             [`players.${mySymbol}`]: currentUser.uid
@@ -492,7 +625,6 @@
                     }
                 }
 
-                // الانتقال للشاشة التالية
                 startGameListener();
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('game-screen').classList.remove('hidden');
@@ -504,7 +636,6 @@
                 
                 createBoard();
                 
-                // تحديث عنوان الصفحة
                 try {
                     const newUrl = `${window.location.pathname}?room=${roomId}`;
                     window.history.pushState({}, '', newUrl);
@@ -526,7 +657,7 @@
             const txtEl = document.getElementById('error-text');
             txtEl.innerText = msg;
             errEl.classList.remove('hidden');
-            playSound('lose'); // صوت تنبيه
+            playSound('lose');
         }
 
         function createBoard() {
@@ -552,7 +683,6 @@
 
             const opponentSymbol = mySymbol === 'X' ? 'O' : 'X';
             if (!gameState.players[opponentSymbol]) {
-                // نسمح باللعب الفردي للتجربة، لكن ننبه
                 // showToast("الخصم لم يدخل بعد، لكن يمكنك اللعب");
             }
 
@@ -616,7 +746,6 @@
                 const cell = cells[idx];
                 cell.innerText = val || '';
                 
-                // إعادة تعيين الكلاسات الأساسية فقط
                 cell.className = 'cell rounded-xl flex items-center justify-center text-5xl font-black cursor-pointer h-full w-full select-none relative overflow-hidden';
                 
                 if (val) {
@@ -625,6 +754,21 @@
                     else cell.classList.add('o-mark');
                 }
             });
+
+            // تحديث الرسائل والتنبيهات
+            const currentMsgCount = gameState.messages ? gameState.messages.length : 0;
+            if (currentMsgCount > lastMessageCount) {
+                // رسالة جديدة وصلت
+                renderMessages(gameState.messages);
+                if (!isChatOpen) {
+                    document.getElementById('chat-badge').classList.remove('hidden');
+                    playSound('message');
+                }
+                lastMessageCount = currentMsgCount;
+            } else if (isChatOpen) {
+                // تحديث العرض فقط إذا كانت المحادثة مفتوحة
+                 renderMessages(gameState.messages);
+            }
 
             // تحديث الحالة والخصم
             const turnIndicator = document.getElementById('turn-indicator');
@@ -637,13 +781,13 @@
             if (!opponentId) {
                 opponentStatus.innerHTML = `<div class="loader w-4 h-4 border-2 border-yellow-500 border-t-transparent"></div> بانتظار الخصم...`;
                 opponentStatus.className = "glass-panel inline-flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium text-yellow-400 animate-pulse";
-                inviteSection.classList.remove('hidden'); // إظهار زر الدعوة
+                inviteSection.classList.remove('hidden'); 
                 
                 turnIndicator.innerHTML = `<span class="text-gray-400">ننتظر اللاعب الثاني</span>`;
             } else {
                 opponentStatus.innerHTML = `<i class="fas fa-wifi text-green-500 text-xs"></i> الخصم متصل`;
                 opponentStatus.className = "glass-panel inline-flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium text-green-400 border-green-500/30";
-                inviteSection.classList.add('hidden'); // إخفاء زر الدعوة لأن الخصم وصل
+                inviteSection.classList.add('hidden'); 
                 
                 if (gameState.winner) {
                      turnIndicator.innerHTML = `<span class="text-white">انتهت اللعبة</span>`;
@@ -704,7 +848,6 @@
             for (let line of lines) {
                 const [a, b, c] = line;
                 if (gameState.board[a] && gameState.board[a] === gameState.board[b] && gameState.board[a] === gameState.board[c]) {
-                    // تأثير التأخير البسيط
                     setTimeout(() => cells[a].classList.add('winning-cell'), 0);
                     setTimeout(() => cells[b].classList.add('winning-cell'), 100);
                     setTimeout(() => cells[c].classList.add('winning-cell'), 200);
@@ -719,7 +862,8 @@
                      board: Array(9).fill(null),
                      turn: 'X', 
                      winner: null,
-                     lastMoveTime: Date.now()
+                     lastMoveTime: Date.now(),
+                     // لا نعيد تعيين الرسائل ليتمكنوا من الحديث بعد اللعبة
                  });
              } catch(e) {
                  console.error("Reset Game Error:", e);
