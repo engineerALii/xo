@@ -46,7 +46,7 @@
         </div>
 
         <button id="login-btn" onclick="joinGame()" disabled class="w-full bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-3 rounded-lg transition transform active:scale-95 shadow-lg opacity-50 cursor-not-allowed">
-            جاري الاتصال...
+            جاري الاتصال بالسيرفر...
         </button>
         <p id="login-error" class="mt-4 text-red-500 text-sm hidden"></p>
     </div>
@@ -92,9 +92,28 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // 1. تكوين Firebase
-        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
-        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
+        // 1. تحديد التكوين المناسب (بيئة المنصة vs الاستضافة الخارجية)
+        let firebaseConfig;
+        let currentAppId;
+
+        // التحقق مما إذا كنا في بيئة التطوير (يوجد متغيرات بيئة) أم لا
+        if (typeof __firebase_config !== 'undefined') {
+            // نحن هنا: نستخدم التكوين التلقائي ليعمل التوكن بشكل صحيح
+            firebaseConfig = JSON.parse(__firebase_config);
+            currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
+        } else {
+            // نحن في GitHub أو استضافة خارجية: نستخدم التكوين اليدوي
+            firebaseConfig = {
+                apiKey: "AIzaSyD6MRZ7d7J1333erYoBrUGqocJNdGNjB7w",
+                authDomain: "neew-aec2b.firebaseapp.com",
+                databaseURL: "https://neew-aec2b-default-rtdb.firebaseio.com",
+                projectId: "neew-aec2b",
+                storageBucket: "neew-aec2b.firebasestorage.app",
+                messagingSenderId: "70112873200",
+                appId: "1:70112873200:web:b8ef2b3863be6f1bf39035"
+            };
+            currentAppId = 'neew-aec2b';
+        }
         
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);
@@ -151,18 +170,24 @@
             }
         }
 
-        // --- إصلاح المصادقة ---
-        // دالة لتهيئة المصادقة باستخدام التوكن المخصص إذا وجد
+        // --- نظام المصادقة المرن ---
         const initAuth = async () => {
             try {
+                // محاولة استخدام التوكن المخصص إذا كان متوفراً (للبيئة الداخلية)
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
+                    // إذا لم يكن هناك توكن (مثل GitHub)، ندخل كمجهول
                     await signInAnonymously(auth);
                 }
             } catch (error) {
-                console.error("Auth failed:", error);
-                showError("فشل الاتصال: " + error.message);
+                console.warn("Auth warning:", error.message);
+                // إذا فشل التوكن لأي سبب (مثل token mismatch)، نحاول فوراً الدخول كمجهول كحل بديل
+                try {
+                    await signInAnonymously(auth);
+                } catch(e) {
+                    showError("فشل الاتصال بقاعدة البيانات. تأكد من تفعيل Anonymous Auth.");
+                }
             }
         };
 
@@ -177,6 +202,12 @@
                 loginBtn.innerText = "دخول اللعبة";
                 loginBtn.disabled = false;
                 loginBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+                
+                // إزالة رسالة الخطأ إن وجدت بمجرد الاتصال
+                const errEl = document.getElementById('login-error');
+                if (!errEl.innerText.includes('اختر')) {
+                     errEl.classList.add('hidden');
+                }
             }
         });
 
@@ -210,16 +241,14 @@
             }
 
             roomId = inputRoomId;
-            const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe_games', roomId);
+            const gameRef = doc(db, 'artifacts', currentAppId, 'public', 'data', 'tictactoe_games', roomId);
 
             try {
                 // محاولة قراءة المستند
-                // ملاحظة: قد تفشل getDoc إذا لم يكن المستند موجوداً وكانت القواعد تمنع list، لذا نستخدم try/catch
                 let docSnap;
                 try {
                     docSnap = await getDoc(gameRef);
                 } catch (e) {
-                    // إذا فشل القراءة بسبب الصلاحيات (لأنه غير موجود)، سنحاول الإنشاء مباشرة
                     docSnap = { exists: () => false };
                 }
                 
@@ -263,9 +292,8 @@
 
             } catch (err) {
                 console.error("Join Game Error:", err);
-                // التعامل مع أخطاء الصلاحيات بشكل خاص
                 if (err.code === 'permission-denied') {
-                    showError("خطأ في الصلاحيات. تأكد من أنك متصل وحاول تحديث الصفحة.");
+                    showError("خطأ في الصلاحيات. تأكد من أن قواعد Firestore تسمح بالقراءة والكتابة.");
                 } else {
                     showError("حدث خطأ أثناء الانضمام: " + err.message);
                 }
@@ -299,19 +327,17 @@
             // التحقق من وجود الخصم
             const opponentSymbol = mySymbol === 'X' ? 'O' : 'X';
             if (!gameState.players[opponentSymbol]) {
-                // يمكن السماح باللعب الفردي للتجربة، لكن الأفضل انتظار الخصم في لعبة أونلاين
+                // يمكن السماح باللعب الفردي للتجربة
             }
 
             const newBoard = [...gameState.board];
             newBoard[index] = mySymbol;
             
-            // التحقق من الفوز محلياً قبل الإرسال (اختياري للسرعة)
             const winner = checkWinner(newBoard);
             const nextTurn = mySymbol === 'X' ? 'O' : 'X';
 
-            const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe_games', roomId);
+            const gameRef = doc(db, 'artifacts', currentAppId, 'public', 'data', 'tictactoe_games', roomId);
             
-            // تشغيل الصوت فوراً للتفاعل
             playSound('move');
 
             try {
@@ -345,7 +371,7 @@
         }
 
         function startGameListener() {
-            const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe_games', roomId);
+            const gameRef = doc(db, 'artifacts', currentAppId, 'public', 'data', 'tictactoe_games', roomId);
             
             unsubscribe = onSnapshot(gameRef, (docSnap) => {
                 if (!docSnap.exists()) return;
@@ -355,10 +381,6 @@
                 updateUI();
             }, (error) => {
                 console.error("Snapshot Error:", error);
-                if (error.code === 'permission-denied') {
-                   // قد يحدث هذا إذا تم حذف الغرفة أو تغيرت الصلاحيات
-                   showError("فقد الاتصال بالغرفة.");
-                }
             });
         }
 
@@ -458,9 +480,7 @@
         }
 
         window.resetGame = async () => {
-             // إعادة تعيين اللعبة في قاعدة البيانات
-             const gameRef = doc(db, 'artifacts', appId, 'public', 'data', 'tictactoe_games', roomId);
-             
+             const gameRef = doc(db, 'artifacts', currentAppId, 'public', 'data', 'tictactoe_games', roomId);
              try {
                  await updateDoc(gameRef, {
                      board: Array(9).fill(null),
@@ -472,7 +492,6 @@
                  console.error("Reset Game Error:", e);
              }
         };
-
     </script>
 </body>
 </html>
