@@ -3,88 +3,222 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>لعبة X-O أونلاين</title>
+    <title>X-O المحترفين</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Cairo:wght@400;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700;900&display=swap" rel="stylesheet">
+    <!-- أيقونات للتصميم -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
-        body { font-family: 'Cairo', sans-serif; background-color: #1a1a2e; color: #fff; }
+        body { 
+            font-family: 'Tajawal', sans-serif; 
+            background: radial-gradient(circle at center, #1f293a 0%, #0f172a 100%);
+            color: #fff; 
+            overflow-x: hidden;
+        }
+
+        /* تأثير الزجاج */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+
         .cell {
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+            background: rgba(255, 255, 255, 0.03);
+            border: 2px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.2);
         }
-        .cell:hover:not(:disabled) {
-            background-color: #16213e;
-            transform: scale(1.05);
-        }
-        .x-mark { color: #e94560; text-shadow: 0 0 10px #e94560; }
-        .o-mark { color: #4ecca3; text-shadow: 0 0 10px #4ecca3; }
-        .winning-cell { background-color: #fcd34d !important; color: #000 !important; }
         
-        /* Modal Animation */
-        .modal-enter { opacity: 0; transform: scale(0.9); }
-        .modal-enter-active { opacity: 1; transform: scale(1); transition: opacity 300ms, transform 300ms; }
+        .cell:hover:not(:disabled):not(.occupied) {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        .occupied { cursor: default; }
+
+        /* ستايل الرموز */
+        .x-mark { 
+            color: #ef4444; 
+            text-shadow: 0 0 20px rgba(239, 68, 68, 0.6);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        .o-mark { 
+            color: #10b981; 
+            text-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+            animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .winning-cell { 
+            background: rgba(251, 191, 36, 0.2) !important; 
+            border-color: #fbbf24 !important;
+            box-shadow: 0 0 30px rgba(251, 191, 36, 0.4) !important;
+        }
+
+        /* زر النسخ */
+        .copy-btn {
+            position: relative;
+            overflow: hidden;
+        }
+        .copy-btn::after {
+            content: '';
+            position: absolute;
+            top: 0; left: -100%;
+            width: 100%; height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: 0.5s;
+        }
+        .copy-btn:hover::after { left: 100%; }
+
+        /* Loader */
+        .loader {
+            border: 3px solid rgba(255,255,255,0.1);
+            border-radius: 50%;
+            border-top: 3px solid #fbbf24;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
     </style>
 </head>
-<body class="flex flex-col items-center justify-center min-h-screen p-4">
+<body class="flex flex-col items-center justify-center min-h-screen p-4 selection:bg-yellow-500 selection:text-black">
 
     <!-- شاشة البداية / الدخول -->
-    <div id="login-screen" class="w-full max-w-md bg-gray-800 p-8 rounded-2xl shadow-2xl text-center">
-        <h1 class="text-4xl font-bold mb-8 text-yellow-400">تحدي X - O</h1>
+    <div id="login-screen" class="w-full max-w-lg glass-panel p-8 rounded-3xl text-center transform transition-all duration-500 hover:scale-[1.01]">
+        <div class="mb-6 flex justify-center">
+            <i class="fas fa-gamepad text-6xl text-yellow-400 drop-shadow-lg"></i>
+        </div>
+        <h1 class="text-5xl font-black mb-2 tracking-tighter bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 to-orange-500">
+            X - O
+        </h1>
+        <p class="text-gray-400 mb-8 text-lg font-medium">تحدى أصدقاءك أونلاين</p>
         
-        <div class="mb-6">
-            <label class="block text-right mb-2 text-gray-300">اسم الغرفة (كلمة سر مشتركة):</label>
-            <input type="text" id="room-id" class="w-full p-3 rounded bg-gray-700 border border-gray-600 focus:outline-none focus:border-yellow-400 text-center text-xl" placeholder="مثال: 1234">
+        <div class="mb-6 text-right relative">
+            <label class="block mb-2 text-gray-300 font-bold text-sm mr-1">رقم الغرفة (ID):</label>
+            <div class="relative">
+                <input type="text" id="room-id" 
+                    class="w-full p-4 rounded-xl bg-gray-900/50 border border-gray-600 focus:outline-none focus:border-yellow-400 focus:ring-2 focus:ring-yellow-400/20 text-center text-2xl font-mono tracking-widest text-white transition-all placeholder-gray-600" 
+                    placeholder="--- ---">
+                <button onclick="generateRoomId()" class="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-white transition" title="توليد رقم عشوائي">
+                    <i class="fas fa-random"></i>
+                </button>
+            </div>
+            <p class="text-xs text-gray-500 mt-2 mr-1">يمكنك كتابة أي رقم أو اسم للغرفة</p>
         </div>
 
         <div class="mb-8">
-            <label class="block text-right mb-2 text-gray-300">اختر الرمز:</label>
+            <label class="block text-right mb-3 text-gray-300 font-bold text-sm mr-1">اختر فريقك:</label>
             <div class="flex gap-4 justify-center">
-                <button id="btn-choice-x" class="flex-1 py-3 bg-gray-700 rounded-lg hover:bg-gray-600 border-2 border-transparent focus:border-red-500 transition font-bold text-xl text-red-400" onclick="selectSymbol('X')">X</button>
-                <button id="btn-choice-o" class="flex-1 py-3 bg-gray-700 rounded-lg hover:bg-gray-600 border-2 border-transparent focus:border-green-500 transition font-bold text-xl text-green-400" onclick="selectSymbol('O')">O</button>
+                <button id="btn-choice-x" class="flex-1 py-4 bg-gray-800/50 rounded-xl border-2 border-transparent hover:bg-gray-700 transition group relative overflow-hidden" onclick="selectSymbol('X')">
+                    <span class="relative z-10 text-3xl font-black text-gray-500 group-hover:text-red-400 transition-colors">X</span>
+                </button>
+                <button id="btn-choice-o" class="flex-1 py-4 bg-gray-800/50 rounded-xl border-2 border-transparent hover:bg-gray-700 transition group relative overflow-hidden" onclick="selectSymbol('O')">
+                    <span class="relative z-10 text-3xl font-black text-gray-500 group-hover:text-green-400 transition-colors">O</span>
+                </button>
             </div>
-            <p id="selected-symbol-text" class="mt-2 text-sm text-gray-400">لم يتم الاختيار</p>
+            <p id="selected-symbol-text" class="mt-3 text-sm text-gray-400 h-5 transition-all">اختر الرمز للبدء</p>
         </div>
 
-        <button id="login-btn" onclick="joinGame()" disabled class="w-full bg-yellow-500 hover:bg-yellow-600 text-gray-900 font-bold py-3 rounded-lg transition transform active:scale-95 shadow-lg opacity-50 cursor-not-allowed">
-            جاري الاتصال بالسيرفر...
+        <button id="login-btn" onclick="joinGame()" disabled 
+            class="w-full bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-400 hover:to-orange-500 text-white font-bold py-4 rounded-xl transition-all shadow-lg hover:shadow-orange-500/20 transform active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2">
+            <span id="btn-text">جاري الاتصال بالسيرفر...</span>
+            <div id="btn-loader" class="loader"></div>
         </button>
-        <p id="login-error" class="mt-4 text-red-500 text-sm hidden"></p>
+
+        <div id="login-error" class="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-300 text-sm hidden flex items-center gap-2 justify-center">
+            <i class="fas fa-exclamation-circle"></i> <span id="error-text"></span>
+        </div>
     </div>
 
     <!-- شاشة اللعب -->
-    <div id="game-screen" class="hidden w-full max-w-md flex flex-col items-center">
-        <div class="w-full flex justify-between items-center mb-6 bg-gray-800 p-4 rounded-xl shadow-lg">
-            <div class="text-center">
-                <span class="block text-xs text-gray-400">أنت تلعب بـ</span>
-                <span id="my-symbol-display" class="text-2xl font-bold"></span>
+    <div id="game-screen" class="hidden w-full max-w-lg flex flex-col items-center">
+        <!-- الهيدر -->
+        <div class="w-full glass-panel p-4 rounded-2xl shadow-2xl mb-6 flex flex-col gap-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center gap-3">
+                    <div class="bg-gray-800 p-2 rounded-lg">
+                        <i class="fas fa-user text-gray-400"></i>
+                    </div>
+                    <div>
+                        <span class="block text-[10px] text-gray-400 uppercase tracking-wide">أنت</span>
+                        <span id="my-symbol-display" class="text-2xl font-black leading-none"></span>
+                    </div>
+                </div>
+
+                <div class="bg-gray-900/60 px-6 py-2 rounded-full border border-gray-700 backdrop-blur-sm">
+                    <span id="turn-indicator" class="text-sm font-bold text-gray-400 flex items-center gap-2">
+                        <span class="w-2 h-2 bg-gray-500 rounded-full animate-pulse"></span> جاري التحميل
+                    </span>
+                </div>
+
+                <div class="flex items-center gap-3 text-left">
+                    <div class="text-right">
+                        <span class="block text-[10px] text-gray-400 uppercase tracking-wide">الغرفة</span>
+                        <span id="room-display" class="text-lg font-mono font-bold text-yellow-500 leading-none"></span>
+                    </div>
+                    <div class="bg-gray-800 p-2 rounded-lg cursor-pointer hover:bg-gray-700 transition" onclick="copyInviteLink()" title="نسخ رابط الدعوة">
+                        <i class="fas fa-link text-white"></i>
+                    </div>
+                </div>
             </div>
-            <div class="bg-gray-700 px-4 py-2 rounded-full border border-gray-600">
-                <span id="turn-indicator" class="text-lg font-bold animate-pulse">جاري الاتصال...</span>
-            </div>
-            <div class="text-center">
-                <span class="block text-xs text-gray-400">الغرفة</span>
-                <span id="room-display" class="text-xl font-mono"></span>
+
+            <!-- رابط الدعوة -->
+            <div id="invite-section" class="bg-blue-600/20 border border-blue-500/30 rounded-xl p-3 flex justify-between items-center animate-pulse">
+                <div class="flex items-center gap-2 text-blue-200 text-sm">
+                    <i class="fas fa-share-alt"></i>
+                    <span>أرسل هذا الرابط لصديقك ليدخل معك فوراً!</span>
+                </div>
+                <button onclick="copyInviteLink()" class="bg-blue-600 hover:bg-blue-500 text-white text-xs px-3 py-1.5 rounded-lg transition font-bold shadow-lg shadow-blue-600/20">
+                    نسخ الرابط
+                </button>
             </div>
         </div>
 
-        <div id="board" class="grid grid-cols-3 gap-3 w-full aspect-square bg-gray-700 p-3 rounded-2xl shadow-inner mb-6">
-            <!-- سيتم توليد الخلايا بالجافاسكريبت -->
+        <!-- البورد -->
+        <div id="board" class="grid grid-cols-3 gap-3 w-full aspect-square glass-panel p-3 rounded-3xl shadow-2xl mb-6 relative">
+             <!-- سيتم التوليد هنا -->
         </div>
 
-        <div class="text-center text-gray-400 text-sm">
-            <p id="opponent-status">بانتظار دخول الخصم...</p>
+        <!-- الحالة -->
+        <div class="w-full text-center">
+             <div id="opponent-status" class="glass-panel inline-flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium text-gray-400">
+                <div class="loader w-4 h-4 border-2 border-gray-500 border-t-transparent"></div>
+                بانتظار انضمام الخصم...
+             </div>
         </div>
     </div>
 
     <!-- نافذة النتيجة -->
-    <div id="result-modal" class="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50 hidden backdrop-blur-sm">
-        <div class="bg-gray-800 p-8 rounded-2xl text-center max-w-sm w-full mx-4 border border-gray-600 shadow-2xl transform transition-all scale-100">
-            <h2 id="result-title" class="text-4xl font-bold mb-4"></h2>
-            <p id="result-message" class="text-gray-300 mb-8 text-lg"></p>
-            <button onclick="resetGame()" class="w-full bg-gradient-to-r from-blue-500 to-indigo-600 hover:from-blue-600 hover:to-indigo-700 text-white font-bold py-3 rounded-lg shadow-lg transform transition hover:-translate-y-1">
-                لعب مرة أخرى
+    <div id="result-modal" class="fixed inset-0 bg-black/90 flex items-center justify-center z-50 hidden backdrop-blur-md">
+        <div class="bg-gray-800 border border-gray-700 p-8 rounded-3xl text-center max-w-sm w-full mx-6 shadow-2xl transform transition-all scale-100 relative overflow-hidden">
+            <!-- Glow Effect -->
+            <div class="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-transparent via-yellow-500 to-transparent opacity-50"></div>
+            
+            <div id="result-icon" class="text-6xl mb-4 animate-bounce">🏆</div>
+            <h2 id="result-title" class="text-3xl font-black mb-2 text-white"></h2>
+            <p id="result-message" class="text-gray-400 mb-8 font-medium"></p>
+            
+            <button onclick="resetGame()" class="w-full bg-white text-black font-black py-4 rounded-xl hover:bg-gray-200 transition-all transform hover:-translate-y-1 shadow-lg flex justify-center items-center gap-2">
+                <i class="fas fa-redo"></i> جولة أخرى
             </button>
         </div>
+    </div>
+
+    <!-- التنبيهات (Toast) -->
+    <div id="toast" class="fixed bottom-10 left-1/2 transform -translate-x-1/2 bg-gray-900 text-white px-6 py-3 rounded-full shadow-2xl border border-gray-700 flex items-center gap-3 transition-all duration-300 opacity-0 translate-y-10 pointer-events-none z-[60]">
+        <i class="fas fa-check-circle text-green-500"></i>
+        <span id="toast-msg">تم نسخ الرابط!</span>
     </div>
 
     <script type="module">
@@ -92,17 +226,15 @@
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
         import { getFirestore, doc, onSnapshot, setDoc, updateDoc, getDoc, collection } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
-        // 1. تحديد التكوين المناسب (بيئة المنصة vs الاستضافة الخارجية)
+        // --- إعدادات وتكوين Firebase ---
         let firebaseConfig;
         let currentAppId;
 
-        // التحقق مما إذا كنا في بيئة التطوير (يوجد متغيرات بيئة) أم لا
         if (typeof __firebase_config !== 'undefined') {
-            // نحن هنا: نستخدم التكوين التلقائي ليعمل التوكن بشكل صحيح
             firebaseConfig = JSON.parse(__firebase_config);
             currentAppId = typeof __app_id !== 'undefined' ? __app_id : 'default-app';
         } else {
-            // نحن في GitHub أو استضافة خارجية: نستخدم التكوين اليدوي
+            // إعدادات GitHub (تأكد من تحديث Authorized Domains في Firebase)
             firebaseConfig = {
                 apiKey: "AIzaSyD6MRZ7d7J1333erYoBrUGqocJNdGNjB7w",
                 authDomain: "neew-aec2b.firebaseapp.com",
@@ -121,134 +253,209 @@
 
         // متغيرات الحالة
         let currentUser = null;
-        let mySymbol = null; // 'X' or 'O'
+        let mySymbol = null; 
         let roomId = null;
         let gameState = {
             board: Array(9).fill(null),
             turn: 'X',
-            winner: null, // null, 'X', 'O', 'draw'
+            winner: null, 
             players: { X: null, O: null },
             lastMoveTime: 0
         };
         let unsubscribe = null;
 
-        // تهيئة الأصوات (Web Audio API)
+        // تهيئة الأصوات
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        
         function playSound(type) {
             if (audioCtx.state === 'suspended') audioCtx.resume();
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
             osc.connect(gainNode);
             gainNode.connect(audioCtx.destination);
+            
+            const now = audioCtx.currentTime;
 
-            if (type === 'move') {
+            if (type === 'click') { // صوت خفيف عند الضغط
                 osc.type = 'sine';
-                osc.frequency.setValueAtTime(400, audioCtx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(600, audioCtx.currentTime + 0.1);
-                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(300, now + 0.1);
+                gainNode.gain.setValueAtTime(0.05, now);
+                gainNode.gain.linearRampToValueAtTime(0, now + 0.1);
                 osc.start();
-                osc.stop(audioCtx.currentTime + 0.1);
-            } else if (type === 'win') {
+                osc.stop(now + 0.1);
+            } else if (type === 'move') { // صوت الحركة
                 osc.type = 'triangle';
-                osc.frequency.setValueAtTime(500, audioCtx.currentTime);
-                osc.frequency.linearRampToValueAtTime(1000, audioCtx.currentTime + 0.2);
-                osc.frequency.linearRampToValueAtTime(800, audioCtx.currentTime + 0.4);
-                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.6);
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.linearRampToValueAtTime(500, now + 0.1);
+                gainNode.gain.setValueAtTime(0.1, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.2);
                 osc.start();
-                osc.stop(audioCtx.currentTime + 0.6);
-            } else if (type === 'lose') {
+                osc.stop(now + 0.2);
+            } else if (type === 'win') { // نغمة الفوز
+                osc.type = 'square';
+                // تتابعية بسيطة
+                osc.frequency.setValueAtTime(523.25, now); // C5
+                osc.frequency.setValueAtTime(659.25, now + 0.1); // E5
+                osc.frequency.setValueAtTime(783.99, now + 0.2); // G5
+                osc.frequency.setValueAtTime(1046.50, now + 0.4); // C6
+                gainNode.gain.setValueAtTime(0.05, now);
+                gainNode.gain.linearRampToValueAtTime(0, now + 0.8);
+                osc.start();
+                osc.stop(now + 0.8);
+            } else if (type === 'lose') { // نغمة الخسارة
                 osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
-                osc.frequency.linearRampToValueAtTime(100, audioCtx.currentTime + 0.4);
-                gainNode.gain.setValueAtTime(0.1, audioCtx.currentTime);
-                gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.4);
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.linearRampToValueAtTime(100, now + 0.5);
+                gainNode.gain.setValueAtTime(0.1, now);
+                gainNode.gain.linearRampToValueAtTime(0, now + 0.5);
                 osc.start();
-                osc.stop(audioCtx.currentTime + 0.4);
+                osc.stop(now + 0.5);
             }
         }
 
-        // --- نظام المصادقة المرن ---
+        // --- دوال مساعدة للغرفة والرابط ---
+        window.generateRoomId = () => {
+            const randomId = Math.floor(1000 + Math.random() * 9000);
+            document.getElementById('room-id').value = randomId;
+            playSound('click');
+        };
+
+        // فحص الرابط عند الفتح لمعرفة الغرفة
+        function checkUrlForRoom() {
+            const urlParams = new URLSearchParams(window.location.search);
+            const roomParam = urlParams.get('room');
+            if (roomParam) {
+                document.getElementById('room-id').value = roomParam;
+                // يمكننا أيضاً محاولة تحديد الرمز تلقائياً إذا أردنا (متقدم)
+            }
+        }
+
+        window.copyInviteLink = () => {
+            const currentUrl = window.location.href.split('?')[0];
+            const inviteUrl = `${currentUrl}?room=${roomId}`;
+            
+            navigator.clipboard.writeText(inviteUrl).then(() => {
+                showToast("تم نسخ رابط الدعوة! أرسله لصديقك");
+            }).catch(() => {
+                // Fallback for some browsers
+                const input = document.createElement('input');
+                input.value = inviteUrl;
+                document.body.appendChild(input);
+                input.select();
+                document.execCommand('copy');
+                document.body.removeChild(input);
+                showToast("تم نسخ الرابط!");
+            });
+        };
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-msg').innerText = msg;
+            toast.classList.remove('opacity-0', 'translate-y-10');
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-10');
+            }, 3000);
+        }
+
+        // --- المصادقة ---
         const initAuth = async () => {
             try {
-                // محاولة استخدام التوكن المخصص إذا كان متوفراً (للبيئة الداخلية)
                 if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
                     await signInWithCustomToken(auth, __initial_auth_token);
                 } else {
-                    // إذا لم يكن هناك توكن (مثل GitHub)، ندخل كمجهول
                     await signInAnonymously(auth);
                 }
             } catch (error) {
-                console.warn("Auth warning:", error.message);
-                // إذا فشل التوكن لأي سبب (مثل token mismatch)، نحاول فوراً الدخول كمجهول كحل بديل
-                try {
-                    await signInAnonymously(auth);
-                } catch(e) {
-                    showError("فشل الاتصال بقاعدة البيانات. تأكد من تفعيل Anonymous Auth.");
-                }
+                console.error("Auth Error:", error);
+                let errorMsg = "فشل الاتصال: " + error.message;
+                // تحسين رسائل الخطأ
+                if (error.code === 'auth/operation-not-allowed') errorMsg = "خطأ: الدخول المجهول غير مفعل.";
+                if (error.code === 'auth/unauthorized-domain') errorMsg = "خطأ: النطاق غير مصرح به.";
+                
+                showError(errorMsg);
+                document.getElementById('btn-text').innerText = "خطأ في الاتصال";
+                document.getElementById('btn-loader').classList.add('hidden');
             }
         };
 
-        // تشغيل المصادقة
         initAuth();
+        checkUrlForRoom();
 
-        // مراقبة حالة المستخدم لتفعيل الزر فقط عند الجاهزية
         onAuthStateChanged(auth, (user) => {
             if (user) {
                 currentUser = user;
                 const loginBtn = document.getElementById('login-btn');
-                loginBtn.innerText = "دخول اللعبة";
+                const btnText = document.getElementById('btn-text');
+                const btnLoader = document.getElementById('btn-loader');
+                
+                btnText.innerText = "دخول اللعبة";
+                btnLoader.classList.add('hidden');
                 loginBtn.disabled = false;
                 loginBtn.classList.remove('opacity-50', 'cursor-not-allowed');
                 
-                // إزالة رسالة الخطأ إن وجدت بمجرد الاتصال
-                const errEl = document.getElementById('login-error');
-                if (!errEl.innerText.includes('اختر')) {
-                     errEl.classList.add('hidden');
-                }
+                document.getElementById('login-error').classList.add('hidden');
             }
         });
 
-        // دوال واجهة المستخدم
+        // --- منطق اللعبة ---
         window.selectSymbol = (symbol) => {
             mySymbol = symbol;
-            document.getElementById('btn-choice-x').className = symbol === 'X' 
-                ? "flex-1 py-3 bg-gray-600 rounded-lg border-2 border-red-500 text-red-400 font-bold text-xl shadow-inner"
-                : "flex-1 py-3 bg-gray-700 rounded-lg text-gray-400 font-bold text-xl opacity-50";
-            document.getElementById('btn-choice-o').className = symbol === 'O' 
-                ? "flex-1 py-3 bg-gray-600 rounded-lg border-2 border-green-500 text-green-400 font-bold text-xl shadow-inner"
-                : "flex-1 py-3 bg-gray-700 rounded-lg text-gray-400 font-bold text-xl opacity-50";
+            playSound('click');
             
-            document.getElementById('selected-symbol-text').innerText = `لقد اخترت: ${symbol}`;
-            document.getElementById('selected-symbol-text').className = symbol === 'X' ? "mt-2 text-sm text-red-400 font-bold" : "mt-2 text-sm text-green-400 font-bold";
+            // تحديث الستايل
+            const btnX = document.getElementById('btn-choice-x');
+            const btnO = document.getElementById('btn-choice-o');
+            
+            if (symbol === 'X') {
+                btnX.className = "flex-1 py-4 bg-gray-700/80 rounded-xl border-2 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.3)] transform scale-105 transition duration-300";
+                btnX.querySelector('span').className = "relative z-10 text-3xl font-black text-red-500";
+                
+                btnO.className = "flex-1 py-4 bg-gray-800/30 rounded-xl border-2 border-transparent opacity-60 hover:opacity-100 transition duration-300";
+                btnO.querySelector('span').className = "relative z-10 text-3xl font-black text-gray-600";
+                
+                document.getElementById('selected-symbol-text').innerHTML = `ستلعب برمز <span class="text-red-500 font-bold">X</span>`;
+            } else {
+                btnO.className = "flex-1 py-4 bg-gray-700/80 rounded-xl border-2 border-green-500 shadow-[0_0_20px_rgba(16,185,129,0.3)] transform scale-105 transition duration-300";
+                btnO.querySelector('span').className = "relative z-10 text-3xl font-black text-green-500";
+                
+                btnX.className = "flex-1 py-4 bg-gray-800/30 rounded-xl border-2 border-transparent opacity-60 hover:opacity-100 transition duration-300";
+                btnX.querySelector('span').className = "relative z-10 text-3xl font-black text-gray-600";
+                
+                document.getElementById('selected-symbol-text').innerHTML = `ستلعب برمز <span class="text-green-500 font-bold">O</span>`;
+            }
         };
 
         window.joinGame = async () => {
+            playSound('click');
             const inputRoomId = document.getElementById('room-id').value.trim();
+            
             if (!inputRoomId) {
-                showError("الرجاء إدخال اسم الغرفة");
+                showError("الرجاء كتابة رقم الغرفة أو توليده");
                 return;
             }
             if (!mySymbol) {
-                showError("الرجاء اختيار X أو O");
+                showError("الرجاء اختيار فريقك (X أو O)");
                 return;
             }
             if (!currentUser) {
-                showError("لم يتم الاتصال بالسيرفر بعد، انتظر قليلاً...");
                 return;
             }
 
             roomId = inputRoomId;
             const gameRef = doc(db, 'artifacts', currentAppId, 'public', 'data', 'tictactoe_games', roomId);
 
+            // تغيير حالة الزر
+            const loginBtn = document.getElementById('login-btn');
+            loginBtn.disabled = true;
+            document.getElementById('btn-text').innerText = "جاري الدخول...";
+            document.getElementById('btn-loader').classList.remove('hidden');
+
             try {
-                // محاولة قراءة المستند
                 let docSnap;
                 try {
                     docSnap = await getDoc(gameRef);
                 } catch (e) {
+                    // إذا فشل بسبب الصلاحيات (غير موجود)، نعامله كجديد
                     docSnap = { exists: () => false };
                 }
                 
@@ -267,12 +474,17 @@
                 } else {
                     // الانضمام لغرفة موجودة
                     const data = docSnap.data();
+                    
+                    // إذا كان الرمز محجوزاً لشخص آخر
                     if (data.players[mySymbol] && data.players[mySymbol] !== currentUser.uid) {
-                        showError(`الرمز ${mySymbol} محجوز بالفعل في هذه الغرفة! اختر الرمز الآخر.`);
+                        showError(`عذراً، الرمز ${mySymbol} مأخوذ بالفعل في الغرفة ${roomId}. جرب الرمز الآخر.`);
+                        loginBtn.disabled = false;
+                        document.getElementById('btn-text').innerText = "دخول اللعبة";
+                        document.getElementById('btn-loader').classList.add('hidden');
                         return;
                     }
                     
-                    // تحديث بيانات اللاعب إذا كان المقعد فارغاً
+                    // حجز المكان إذا كان فارغاً
                     if (!data.players[mySymbol]) {
                         await updateDoc(gameRef, {
                             [`players.${mySymbol}`]: currentUser.uid
@@ -280,30 +492,41 @@
                     }
                 }
 
+                // الانتقال للشاشة التالية
                 startGameListener();
                 document.getElementById('login-screen').classList.add('hidden');
                 document.getElementById('game-screen').classList.remove('hidden');
                 document.getElementById('game-screen').classList.add('flex');
+                
                 document.getElementById('room-display').innerText = roomId;
                 document.getElementById('my-symbol-display').innerText = mySymbol;
-                document.getElementById('my-symbol-display').className = `text-4xl font-bold ${mySymbol === 'X' ? 'text-red-500' : 'text-green-500'}`;
+                document.getElementById('my-symbol-display').className = `text-4xl font-black ${mySymbol === 'X' ? 'text-red-500' : 'text-green-500'}`;
                 
                 createBoard();
+                
+                // تحديث عنوان الصفحة
+                try {
+                    const newUrl = `${window.location.pathname}?room=${roomId}`;
+                    window.history.pushState({}, '', newUrl);
+                } catch (e) {
+                    console.warn("Could not update URL history:", e);
+                }
 
             } catch (err) {
-                console.error("Join Game Error:", err);
-                if (err.code === 'permission-denied') {
-                    showError("خطأ في الصلاحيات. تأكد من أن قواعد Firestore تسمح بالقراءة والكتابة.");
-                } else {
-                    showError("حدث خطأ أثناء الانضمام: " + err.message);
-                }
+                console.error("Join Error:", err);
+                showError("حدث خطأ في الاتصال، حاول مجدداً");
+                loginBtn.disabled = false;
+                document.getElementById('btn-text').innerText = "دخول اللعبة";
+                document.getElementById('btn-loader').classList.add('hidden');
             }
         };
 
         function showError(msg) {
             const errEl = document.getElementById('login-error');
-            errEl.innerText = msg;
+            const txtEl = document.getElementById('error-text');
+            txtEl.innerText = msg;
             errEl.classList.remove('hidden');
+            playSound('lose'); // صوت تنبيه
         }
 
         function createBoard() {
@@ -311,7 +534,7 @@
             boardEl.innerHTML = '';
             for (let i = 0; i < 9; i++) {
                 const cell = document.createElement('div');
-                cell.className = 'cell bg-gray-800 rounded-lg flex items-center justify-center text-4xl font-bold cursor-pointer h-full w-full select-none';
+                cell.className = 'cell rounded-xl flex items-center justify-center text-5xl font-black cursor-pointer h-full w-full select-none relative overflow-hidden';
                 cell.dataset.index = i;
                 cell.onclick = () => makeMove(i);
                 boardEl.appendChild(cell);
@@ -320,14 +543,17 @@
 
         async function makeMove(index) {
             if (!gameState) return;
-            if (gameState.board[index] !== null) return; // الخانة مشغولة
-            if (gameState.winner) return; // اللعبة منتهية
-            if (gameState.turn !== mySymbol) return; // ليس دورك
+            if (gameState.board[index] !== null) return; 
+            if (gameState.winner) return; 
+            if (gameState.turn !== mySymbol) {
+                showToast("ليس دورك الآن!");
+                return; 
+            }
 
-            // التحقق من وجود الخصم
             const opponentSymbol = mySymbol === 'X' ? 'O' : 'X';
             if (!gameState.players[opponentSymbol]) {
-                // يمكن السماح باللعب الفردي للتجربة
+                // نسمح باللعب الفردي للتجربة، لكن ننبه
+                // showToast("الخصم لم يدخل بعد، لكن يمكنك اللعب");
             }
 
             const newBoard = [...gameState.board];
@@ -354,9 +580,9 @@
 
         function checkWinner(board) {
             const lines = [
-                [0, 1, 2], [3, 4, 5], [6, 7, 8], // Rows
-                [0, 3, 6], [1, 4, 7], [2, 5, 8], // Cols
-                [0, 4, 8], [2, 4, 6]             // Diagonals
+                [0, 1, 2], [3, 4, 5], [6, 7, 8], 
+                [0, 3, 6], [1, 4, 7], [2, 5, 8], 
+                [0, 4, 8], [2, 4, 6]             
             ];
 
             for (let line of lines) {
@@ -379,8 +605,6 @@
                 const data = docSnap.data();
                 gameState = data;
                 updateUI();
-            }, (error) => {
-                console.error("Snapshot Error:", error);
             });
         }
 
@@ -391,46 +615,50 @@
             gameState.board.forEach((val, idx) => {
                 const cell = cells[idx];
                 cell.innerText = val || '';
-                cell.className = 'cell bg-gray-800 rounded-lg flex items-center justify-center text-4xl font-bold cursor-pointer h-full w-full select-none'; // Reset classes
                 
-                if (val === 'X') {
-                    cell.classList.add('x-mark');
-                } else if (val === 'O') {
-                    cell.classList.add('o-mark');
+                // إعادة تعيين الكلاسات الأساسية فقط
+                cell.className = 'cell rounded-xl flex items-center justify-center text-5xl font-black cursor-pointer h-full w-full select-none relative overflow-hidden';
+                
+                if (val) {
+                    cell.classList.add('occupied');
+                    if (val === 'X') cell.classList.add('x-mark');
+                    else cell.classList.add('o-mark');
                 }
             });
 
-            // تحديث مؤشر الدور
+            // تحديث الحالة والخصم
             const turnIndicator = document.getElementById('turn-indicator');
+            const opponentStatus = document.getElementById('opponent-status');
+            const inviteSection = document.getElementById('invite-section');
+
             const opponentSymbol = mySymbol === 'X' ? 'O' : 'X';
             const opponentId = gameState.players[opponentSymbol];
 
             if (!opponentId) {
-                document.getElementById('opponent-status').innerText = `بانتظار انضمام اللاعب ${opponentSymbol}... شارك اسم الغرفة (${roomId})`;
-                document.getElementById('opponent-status').className = "text-yellow-400 font-bold animate-pulse";
-                turnIndicator.innerText = "بانتظار الخصم";
-                turnIndicator.className = "text-lg font-bold text-gray-400";
+                opponentStatus.innerHTML = `<div class="loader w-4 h-4 border-2 border-yellow-500 border-t-transparent"></div> بانتظار الخصم...`;
+                opponentStatus.className = "glass-panel inline-flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium text-yellow-400 animate-pulse";
+                inviteSection.classList.remove('hidden'); // إظهار زر الدعوة
+                
+                turnIndicator.innerHTML = `<span class="text-gray-400">ننتظر اللاعب الثاني</span>`;
             } else {
-                document.getElementById('opponent-status').innerText = "الخصم متصل";
-                document.getElementById('opponent-status').className = "text-green-500 font-bold";
+                opponentStatus.innerHTML = `<i class="fas fa-wifi text-green-500 text-xs"></i> الخصم متصل`;
+                opponentStatus.className = "glass-panel inline-flex items-center gap-2 px-6 py-2 rounded-full text-sm font-medium text-green-400 border-green-500/30";
+                inviteSection.classList.add('hidden'); // إخفاء زر الدعوة لأن الخصم وصل
                 
                 if (gameState.winner) {
-                     turnIndicator.innerText = "انتهت اللعبة";
-                     turnIndicator.className = "text-lg font-bold text-gray-400";
+                     turnIndicator.innerHTML = `<span class="text-white">انتهت اللعبة</span>`;
                 } else if (gameState.turn === mySymbol) {
-                    turnIndicator.innerText = "دورك الآن!";
-                    turnIndicator.className = "text-lg font-bold text-green-400 animate-bounce";
+                    turnIndicator.innerHTML = `<span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span> <span class="text-green-400">دورك الآن</span>`;
+                    turnIndicator.parentElement.className = "bg-green-900/40 px-6 py-2 rounded-full border border-green-500/50 backdrop-blur-sm transition-all shadow-[0_0_15px_rgba(16,185,129,0.2)]";
                 } else {
-                    turnIndicator.innerText = "دور الخصم...";
-                    turnIndicator.className = "text-lg font-bold text-red-400";
+                    turnIndicator.innerHTML = `<span class="w-2 h-2 bg-red-500 rounded-full"></span> <span class="text-red-400">دور الخصم</span>`;
+                    turnIndicator.parentElement.className = "bg-red-900/20 px-6 py-2 rounded-full border border-red-500/20 backdrop-blur-sm transition-all";
                 }
             }
 
-            // التعامل مع الفوز/النهاية
             if (gameState.winner) {
                 handleGameEnd(gameState.winner);
             } else {
-                // إخفاء المودال إذا بدأت لعبة جديدة
                 document.getElementById('result-modal').classList.add('hidden');
             }
         }
@@ -439,23 +667,27 @@
             const modal = document.getElementById('result-modal');
             const title = document.getElementById('result-title');
             const msg = document.getElementById('result-message');
+            const icon = document.getElementById('result-icon');
             
             modal.classList.remove('hidden');
             
             if (winner === 'draw') {
+                icon.innerText = "🤝";
                 title.innerText = "تعادل!";
-                title.className = "text-4xl font-bold mb-4 text-gray-300";
-                msg.innerText = "لعبة جيدة، لا يوجد فائز.";
+                title.className = "text-3xl font-black mb-2 text-gray-300";
+                msg.innerText = "منافسة قوية، لا يوجد فائز.";
             } else if (winner === mySymbol) {
-                title.innerText = "مبروك! أنت الفائز";
-                title.className = "text-4xl font-bold mb-4 text-yellow-400";
-                msg.innerText = "لقد هزمت الخصم بجدارة.";
+                icon.innerText = "👑";
+                title.innerText = "أنت الأسطورة!";
+                title.className = "text-4xl font-black mb-2 text-yellow-400 drop-shadow-lg";
+                msg.innerText = "لقد سحقت خصمك بجدارة.";
                 playSound('win');
                 highlightWinningCells();
             } else {
-                title.innerText = "حظ أوفر";
-                title.className = "text-4xl font-bold mb-4 text-red-500";
-                msg.innerText = "لقد فاز الخصم هذه المرة.";
+                icon.innerText = "💀";
+                title.innerText = "خسارة...";
+                title.className = "text-3xl font-black mb-2 text-red-500";
+                msg.innerText = "حظ أوفر في المرة القادمة.";
                 playSound('lose');
                 highlightWinningCells();
             }
@@ -472,9 +704,10 @@
             for (let line of lines) {
                 const [a, b, c] = line;
                 if (gameState.board[a] && gameState.board[a] === gameState.board[b] && gameState.board[a] === gameState.board[c]) {
-                    cells[a].classList.add('winning-cell');
-                    cells[b].classList.add('winning-cell');
-                    cells[c].classList.add('winning-cell');
+                    // تأثير التأخير البسيط
+                    setTimeout(() => cells[a].classList.add('winning-cell'), 0);
+                    setTimeout(() => cells[b].classList.add('winning-cell'), 100);
+                    setTimeout(() => cells[c].classList.add('winning-cell'), 200);
                 }
             }
         }
